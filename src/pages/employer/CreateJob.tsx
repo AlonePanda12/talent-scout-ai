@@ -66,13 +66,17 @@ const CreateJob = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: userData } = await (sb as any)
+      const { data: userData, error: userError } = await (sb as any)
         .from("users")
         .select("id")
         .eq("auth_id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (!userData) throw new Error("User not found");
+      if (userError) throw userError;
+      if (!userData) {
+        toast.error("User profile not found. Please try logging out and back in.");
+        throw new Error("User profile not found");
+      }
 
       const { data, error } = await (sb as any)
         .from("jobs")

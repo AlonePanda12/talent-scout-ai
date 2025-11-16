@@ -30,29 +30,64 @@ const CandidateDashboard = () => {
   }, []);
 
   const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      navigate("/login");
-      return;
-    }
-    if (session.user.user_metadata.role !== "candidate") {
-      toast.error("Unauthorized access");
-      navigate("/");
-      return;
-    }
-    setUserName(session.user.user_metadata.full_name || session.user.email || "User");
-    
-    const { data: userData } = await (sb as any)
-      .from("users")
-      .select("id")
-      .eq("auth_id", session.user.id)
-      .single();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate("/login");
+        return;
+      }
+      if (session.user.user_metadata.role !== "candidate") {
+        toast.error("Unauthorized access");
+        navigate("/");
+        return;
+      }
+      setUserName(session.user.user_metadata.full_name || session.user.email || "User");
+      
+      let { data: userData, error: userError } = await (sb as any)
+        .from("users")
+        .select("id")
+        .eq("auth_id", session.user.id)
+        .maybeSingle();
 
-    if (userData) {
+      if (userError) {
+        console.error("Error fetching user:", userError);
+        toast.error("Failed to load user profile");
+        setLoading(false);
+        return;
+      }
+
+      // Create user profile if it doesn't exist
+      if (!userData) {
+        const { data: newUser, error: insertError } = await (sb as any)
+          .from("users")
+          .insert({
+            auth_id: session.user.id,
+            email: session.user.email,
+            full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+            role: 'candidate'
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          console.error("Error creating user profile:", insertError);
+          toast.error("Failed to create user profile. Please contact support.");
+          setLoading(false);
+          return;
+        }
+
+        userData = newUser;
+        toast.success("Profile created successfully!");
+      }
+
       setUserId(userData.id);
       fetchResumes(userData.id);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error in checkAuth:", error);
+      toast.error("An unexpected error occurred");
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchResumes = async (candidateId: string) => {

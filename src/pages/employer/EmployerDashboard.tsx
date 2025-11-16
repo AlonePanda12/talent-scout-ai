@@ -43,15 +43,47 @@ const EmployerDashboard = () => {
   const fetchJobs = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-      const { data: userData } = await (sb as any)
+      let { data: userData, error: userError } = await (sb as any)
         .from("users")
         .select("id")
         .eq("auth_id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (!userData) return;
+      if (userError) {
+        console.error("Error fetching user:", userError);
+        toast.error("Failed to load user profile");
+        setLoading(false);
+        return;
+      }
+
+      // Create user profile if it doesn't exist
+      if (!userData) {
+        const { data: newUser, error: insertError } = await (sb as any)
+          .from("users")
+          .insert({
+            auth_id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+            role: 'employer'
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          console.error("Error creating user profile:", insertError);
+          toast.error("Failed to create user profile. Please contact support.");
+          setLoading(false);
+          return;
+        }
+
+        userData = newUser;
+        toast.success("Profile created successfully!");
+      }
 
       const { data, error } = await (sb as any)
         .from("jobs")

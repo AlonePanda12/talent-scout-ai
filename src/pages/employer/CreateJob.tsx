@@ -66,16 +66,34 @@ const CreateJob = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: userData, error: userError } = await (sb as any)
+      let { data: userData, error: userError } = await (sb as any)
         .from("users")
         .select("id")
         .eq("auth_id", user.id)
         .maybeSingle();
 
       if (userError) throw userError;
+
+      // Create user profile if it doesn't exist
       if (!userData) {
-        toast.error("User profile not found. Please try logging out and back in.");
-        throw new Error("User profile not found");
+        const { data: newUser, error: insertError } = await (sb as any)
+          .from("users")
+          .insert({
+            auth_id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+            role: 'employer'
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          console.error("Error creating user profile:", insertError);
+          throw new Error("Failed to create user profile. Please contact support.");
+        }
+
+        userData = newUser;
+        toast.success("Profile created successfully!");
       }
 
       const { data, error } = await (sb as any)

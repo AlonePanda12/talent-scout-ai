@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+const sb = supabase as any;
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -65,7 +66,7 @@ const CreateJob = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: userData } = await supabase
+      const { data: userData } = await (sb as any)
         .from("users")
         .select("id")
         .eq("auth_id", user.id)
@@ -73,7 +74,7 @@ const CreateJob = () => {
 
       if (!userData) throw new Error("User not found");
 
-      const { data, error } = await supabase
+      const { data, error } = await (sb as any)
         .from("jobs")
         .insert({
           employer_id: userData.id,
@@ -86,7 +87,7 @@ const CreateJob = () => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error || !data) throw (error || new Error("Failed to create job"));
 
       toast.success("Job posted successfully!");
       navigate(`/employer/jobs/${data.id}`);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+const sb = supabase as any;
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,14 +35,14 @@ const JobDetails = () => {
 
   const fetchJobDetails = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (sb as any)
         .from("jobs")
         .select("*")
         .eq("id", id)
         .single();
 
       if (error) throw error;
-      setJob(data);
+      setJob((data as any) as Job);
     } catch (error) {
       console.error("Error fetching job:", error);
       toast.error("Failed to load job details");

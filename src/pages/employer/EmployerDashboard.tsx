@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+const sb = supabase as any;
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Briefcase, Users, FileText, LogOut, Plus } from "lucide-react";
@@ -44,7 +45,7 @@ const EmployerDashboard = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: userData } = await supabase
+      const { data: userData } = await (sb as any)
         .from("users")
         .select("id")
         .eq("auth_id", user.id)
@@ -52,7 +53,7 @@ const EmployerDashboard = () => {
 
       if (!userData) return;
 
-      const { data, error } = await supabase
+      const { data, error } = await (sb as any)
         .from("jobs")
         .select("*")
         .eq("employer_id", userData.id)

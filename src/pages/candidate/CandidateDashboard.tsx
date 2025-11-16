@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+const sb = supabase as any;
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,7 +42,7 @@ const CandidateDashboard = () => {
     }
     setUserName(session.user.user_metadata.full_name || session.user.email || "User");
     
-    const { data: userData } = await supabase
+    const { data: userData } = await (sb as any)
       .from("users")
       .select("id")
       .eq("auth_id", session.user.id)
@@ -56,7 +57,7 @@ const CandidateDashboard = () => {
 
   const fetchResumes = async (candidateId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (sb as any)
         .from("resumes")
         .select("*")
         .eq("candidate_id", candidateId)
@@ -102,7 +103,7 @@ const CandidateDashboard = () => {
       if (uploadError) throw uploadError;
 
       // Create resume record
-      const { error: insertError } = await supabase
+      const { error: insertError } = await (sb as any)
         .from("resumes")
         .insert({
           candidate_id: userId,

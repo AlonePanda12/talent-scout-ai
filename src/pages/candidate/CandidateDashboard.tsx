@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileText, LogOut, Upload, CheckCircle, XCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { FileText, LogOut, Upload, CheckCircle, XCircle, Briefcase, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
 interface Resume {
@@ -17,11 +19,33 @@ interface Resume {
   created_at: string;
 }
 
+interface JobMatch {
+  id: string;
+  score: number;
+  breakdown: {
+    matched: string[];
+    missing: string[];
+  };
+  job: {
+    id: string;
+    title: string;
+    description: string;
+    employer_id: string;
+    min_experience: number;
+    threshold: number;
+  };
+  resume: {
+    id: string;
+    file_path: string;
+  };
+}
+
 const CandidateDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [resumes, setResumes] = useState<Resume[]>([]);
+  const [matches, setMatches] = useState<JobMatch[]>([]);
   const [userName, setUserName] = useState("");
   const [userId, setUserId] = useState("");
 
@@ -81,7 +105,10 @@ const CandidateDashboard = () => {
       }
 
       setUserId(userData.id);
-      fetchResumes(userData.id);
+      await Promise.all([
+        fetchResumes(userData.id),
+        fetchMatches(userData.id)
+      ]);
       setLoading(false);
     } catch (error) {
       console.error("Error in checkAuth:", error);
@@ -103,6 +130,28 @@ const CandidateDashboard = () => {
     } catch (error) {
       console.error("Error fetching resumes:", error);
       toast.error("Failed to load resumes");
+    }
+  };
+
+  const fetchMatches = async (candidateId: string) => {
+    try {
+      const { data, error } = await (sb as any)
+        .from("matches")
+        .select(`
+          id,
+          score,
+          breakdown,
+          job:jobs(id, title, description, employer_id, min_experience, threshold),
+          resume:resumes!inner(id, file_path, candidate_id)
+        `)
+        .eq("resume.candidate_id", candidateId)
+        .order("score", { ascending: false });
+
+      if (error) throw error;
+      setMatches(data || []);
+    } catch (error) {
+      console.error("Error fetching matches:", error);
+      toast.error("Failed to load job matches");
     }
   };
 
@@ -170,6 +219,8 @@ const CandidateDashboard = () => {
           toast.error("Resume uploaded but parsing failed. Please try again.");
         } else {
           toast.success("Resume parsed successfully!");
+          // Refetch matches after parsing
+          await fetchMatches(userId);
         }
       }
 
@@ -215,6 +266,105 @@ const CandidateDashboard = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Matched Jobs Section */}
+        {matches.length > 0 && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Briefcase className="w-5 h-5" />
+                Matched Jobs
+              </CardTitle>
+              <CardDescription>
+                Jobs that match your skills and experience ({matches.length} total)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {matches.map((match) => (
+                  <Card key={match.id} className="border-l-4" style={{
+                    borderLeftColor: match.score >= match.job.threshold ? 'hsl(var(--success))' : 'hsl(var(--muted))'
+                  }}>
+                    <CardHeader>
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="flex-1">
+                          <CardTitle className="text-lg">{match.job.title}</CardTitle>
+                          <CardDescription className="mt-1 line-clamp-2">
+                            {match.job.description}
+                          </CardDescription>
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-center gap-2 mb-1">
+                            <TrendingUp className="w-4 h-4 text-primary" />
+                            <span className="text-2xl font-bold text-primary">
+                              {match.score}%
+                            </span>
+                          </div>
+                          {match.score >= match.job.threshold && (
+                            <Badge variant="default" className="bg-success">
+                              Shortlisted
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-muted-foreground">Match Score</span>
+                            <span className="font-medium">{match.score}%</span>
+                          </div>
+                          <Progress value={match.score} className="h-2" />
+                        </div>
+
+                        {match.breakdown && (
+                          <div className="grid md:grid-cols-2 gap-4">
+                            {match.breakdown.matched && match.breakdown.matched.length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
+                                  <CheckCircle className="w-4 h-4 text-success" />
+                                  Matched Skills ({match.breakdown.matched.length})
+                                </h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {match.breakdown.matched.map((skill: string, idx: number) => (
+                                    <Badge key={idx} variant="secondary" className="bg-success/10 text-success">
+                                      {skill}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {match.breakdown.missing && match.breakdown.missing.length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
+                                  <XCircle className="w-4 h-4 text-muted-foreground" />
+                                  Skills to Improve ({match.breakdown.missing.length})
+                                </h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {match.breakdown.missing.map((skill: string, idx: number) => (
+                                    <Badge key={idx} variant="outline" className="text-muted-foreground">
+                                      {skill}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="text-xs text-muted-foreground">
+                          Resume: {match.resume.file_path.split('/').pop()}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Upload Section */}
         <Card className="mb-8">
           <CardHeader>

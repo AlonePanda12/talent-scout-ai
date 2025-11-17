@@ -148,7 +148,31 @@ const CandidateDashboard = () => {
 
       if (insertError) throw insertError;
 
-      toast.success("Resume uploaded successfully! Processing will begin shortly.");
+      // Get the resume ID from the insert
+      const { data: resumeData } = await (sb as any)
+        .from("resumes")
+        .select("id")
+        .eq("candidate_id", userId)
+        .eq("file_path", fileName)
+        .single();
+
+      if (resumeData?.id) {
+        // Trigger AI parsing
+        toast.success("Resume uploaded! AI parsing in progress...");
+        
+        // Call the edge function to parse the resume
+        const { error: parseError } = await supabase.functions.invoke('parse-resume', {
+          body: { resumeId: resumeData.id }
+        });
+
+        if (parseError) {
+          console.error("Error triggering resume parsing:", parseError);
+          toast.error("Resume uploaded but parsing failed. Please try again.");
+        } else {
+          toast.success("Resume parsed successfully!");
+        }
+      }
+
       fetchResumes(userId);
 
       // Reset file input

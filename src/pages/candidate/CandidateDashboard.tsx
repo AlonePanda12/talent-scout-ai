@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { FileText, LogOut, Upload, CheckCircle, XCircle, Briefcase, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+import SkillsRecommendations from "@/components/SkillsRecommendations";
 
 interface Resume {
   id: string;
@@ -266,6 +267,13 @@ const CandidateDashboard = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Skills Recommendations Section */}
+        {matches.length > 0 && (
+          <div className="mb-8">
+            <SkillsRecommendations matches={matches} />
+          </div>
+        )}
+
         {/* Matched Jobs Section */}
         {matches.length > 0 && (
           <Card className="mb-8">

@@ -4,8 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 const sb = supabase as any;
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Briefcase, Users, FileText, LogOut, Plus } from "lucide-react";
+import { Briefcase, Users, FileText, LogOut, Plus, Download, Eye } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 
 interface Job {
   id: string;
@@ -15,15 +16,30 @@ interface Job {
   status: string;
 }
 
+interface MatchedResume {
+  id: string;
+  score: number;
+  job_title: string;
+  job_id: string;
+  candidate_name: string;
+  candidate_email: string;
+  file_path: string;
+  parsed: any;
+  created_at: string;
+}
+
 const EmployerDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [userName, setUserName] = useState("");
+  const [matchedResumes, setMatchedResumes] = useState<MatchedResume[]>([]);
+  const [resumesLoading, setResumesLoading] = useState(true);
 
   useEffect(() => {
     checkAuth();
     fetchJobs();
+    fetchMatchedResumes();
   }, []);
 
   const checkAuth = async () => {
@@ -101,6 +117,91 @@ const EmployerDashboard = () => {
     }
   };
 
+  const fetchMatchedResumes = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setResumesLoading(false);
+        return;
+      }
+
+      const { data: userData } = await (sb as any)
+        .from("users")
+        .select("id")
+        .eq("auth_id", user.id)
+        .maybeSingle();
+
+      if (!userData) {
+        setResumesLoading(false);
+        return;
+      }
+
+      // Fetch all matches for jobs owned by this employer
+      const { data, error } = await (sb as any)
+        .from("matches")
+        .select(`
+          id,
+          score,
+          created_at,
+          job_id,
+          jobs!inner(title, employer_id),
+          resumes!inner(
+            id,
+            file_path,
+            parsed,
+            candidate_id,
+            users!inner(full_name, email)
+          )
+        `)
+        .eq("jobs.employer_id", userData.id)
+        .order("score", { ascending: false });
+
+      if (error) throw error;
+
+      const formattedResumes = (data || []).map((match: any) => ({
+        id: match.resumes.id,
+        score: match.score,
+        job_title: match.jobs.title,
+        job_id: match.job_id,
+        candidate_name: match.resumes.users.full_name,
+        candidate_email: match.resumes.users.email,
+        file_path: match.resumes.file_path,
+        parsed: match.resumes.parsed,
+        created_at: match.created_at,
+      }));
+
+      setMatchedResumes(formattedResumes);
+    } catch (error) {
+      console.error("Error fetching matched resumes:", error);
+      toast.error("Failed to load matched resumes");
+    } finally {
+      setResumesLoading(false);
+    }
+  };
+
+  const handleDownloadResume = async (filePath: string, candidateName: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from("resumes")
+        .download(filePath);
+
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${candidateName}_resume.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Resume downloaded successfully");
+    } catch (error) {
+      console.error("Error downloading resume:", error);
+      toast.error("Failed to download resume");
+    }
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate("/login");
@@ -149,11 +250,11 @@ const EmployerDashboard = () => {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Applications</CardTitle>
+              <CardTitle className="text-sm font-medium">Matched Resumes</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">0</div>
+              <div className="text-2xl font-bold">{matchedResumes.length}</div>
             </CardContent>
           </Card>
         </div>
@@ -209,6 +310,69 @@ const EmployerDashboard = () => {
                       </CardHeader>
                     </Card>
                   </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Matched Resumes Section */}
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>Matched Resumes</CardTitle>
+            <CardDescription>View resumes matched to your job postings</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {resumesLoading ? (
+              <p className="text-center text-muted-foreground py-8">Loading resumes...</p>
+            ) : matchedResumes.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No matched resumes yet</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {matchedResumes.map((resume) => (
+                  <Card key={resume.id} className="hover:shadow-md transition-shadow">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <CardTitle className="text-lg">{resume.candidate_name}</CardTitle>
+                            <Badge variant="secondary" className="text-xs">
+                              Match: {resume.score}%
+                            </Badge>
+                          </div>
+                          <CardDescription className="space-y-1">
+                            <p>Email: {resume.candidate_email}</p>
+                            <p>Job: {resume.job_title}</p>
+                            {resume.parsed?.experience && (
+                              <p>Experience: {resume.parsed.experience} years</p>
+                            )}
+                            {resume.parsed?.skills && Array.isArray(resume.parsed.skills) && (
+                              <p className="flex flex-wrap gap-1 mt-2">
+                                Skills: {resume.parsed.skills.slice(0, 5).map((skill: string, idx: number) => (
+                                  <Badge key={idx} variant="outline" className="text-xs">
+                                    {skill}
+                                  </Badge>
+                                ))}
+                              </p>
+                            )}
+                          </CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadResume(resume.file_path, resume.candidate_name)}
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Download
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                  </Card>
                 ))}
               </div>
             )}

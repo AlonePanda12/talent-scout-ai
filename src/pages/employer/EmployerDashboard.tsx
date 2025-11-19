@@ -432,6 +432,14 @@ const EmployerDashboard = () => {
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => navigate(`/employer/resumes/${resume.id}`)}
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => handleDownloadResume(resume.file_path, resume.candidate_name)}
                           >
                             <Download className="w-4 h-4 mr-2" />

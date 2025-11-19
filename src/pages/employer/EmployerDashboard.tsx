@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Briefcase, Users, FileText, LogOut, Plus, Download, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Job {
   id: string;
@@ -35,6 +36,8 @@ const EmployerDashboard = () => {
   const [userName, setUserName] = useState("");
   const [matchedResumes, setMatchedResumes] = useState<MatchedResume[]>([]);
   const [resumesLoading, setResumesLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("score-desc");
 
   useEffect(() => {
     checkAuth();
@@ -319,8 +322,38 @@ const EmployerDashboard = () => {
         {/* Matched Resumes Section */}
         <Card className="mt-8">
           <CardHeader>
-            <CardTitle>Matched Resumes</CardTitle>
-            <CardDescription>View resumes matched to your job postings</CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle>Matched Resumes</CardTitle>
+                <CardDescription>View resumes matched to your job postings</CardDescription>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Select value={selectedJob} onValueChange={setSelectedJob}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by job" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Jobs</SelectItem>
+                    {jobs.map((job) => (
+                      <SelectItem key={job.id} value={job.id}>
+                        {job.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="score-desc">Highest Match</SelectItem>
+                    <SelectItem value="score-asc">Lowest Match</SelectItem>
+                    <SelectItem value="date-desc">Newest First</SelectItem>
+                    <SelectItem value="date-asc">Oldest First</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {resumesLoading ? (
@@ -332,7 +365,23 @@ const EmployerDashboard = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {matchedResumes.map((resume) => (
+                {matchedResumes
+                  .filter((resume) => selectedJob === "all" || resume.job_id === selectedJob)
+                  .sort((a, b) => {
+                    switch (sortBy) {
+                      case "score-desc":
+                        return b.score - a.score;
+                      case "score-asc":
+                        return a.score - b.score;
+                      case "date-desc":
+                        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                      case "date-asc":
+                        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                      default:
+                        return 0;
+                    }
+                  })
+                  .map((resume) => (
                   <Card key={resume.id} className="hover:shadow-md transition-shadow">
                     <CardHeader>
                       <div className="flex justify-between items-start">
